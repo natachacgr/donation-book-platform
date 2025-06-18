@@ -33,11 +33,6 @@ const BookPage = ({ openModal }) => {
     fetchLivros();
   }, [fetchLivros]);
 
-  // Esta função será chamada pelo App.jsx APENAS quando o modal for fechado COM sucesso.
-  const handleModalCloseAndSuccess = useCallback(() => {
-    fetchLivros(); // Recarrega os livros para atualizar a quantidade na tabela
-  }, [fetchLivros]);
-
   const livrosOrdenados = [...livros].sort((a, b) => {
     if (a.quantidade === 0 && b.quantidade > 0) return 1;
     if (a.quantidade > 0 && b.quantidade === 0) return -1;
@@ -55,8 +50,14 @@ const BookPage = ({ openModal }) => {
 
     try {
       setUpdatingBook(livro.id);
-      // Passa a função de callback para ser acionada ao fechar o modal com sucesso
-      openModal(livro, handleModalCloseAndSuccess);
+
+      // Cria um callback que sempre atualiza a lista, independente do resultado
+      const alwaysUpdateCallback = () => {
+        fetchLivros(); // Sempre recarrega os livros quando o modal é fechado
+      };
+
+      // Passa o callback que sempre executa
+      openModal(livro, alwaysUpdateCallback);
     } catch (err) {
       setError("Erro ao selecionar livro. Tente novamente.");
       console.error("Erro ao selecionar livro:", err);
@@ -142,17 +143,6 @@ const BookPage = ({ openModal }) => {
                   {searchTerm && ` para "${searchTerm}"`}
                 </p>
               </div>
-
-              <button
-                onClick={fetchLivros}
-                disabled={loading}
-                className="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                <RefreshCw
-                  className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
-                />
-                Atualizar
-              </button>
             </div>
           </div>
 

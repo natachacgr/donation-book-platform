@@ -24,32 +24,31 @@ const App = () => {
     lgpdConsent: false,
   });
 
-  // Novo estado para armazenar a função de callback que será chamada ao fechar o modal,
-  // mas SOMENTE se a operação interna do modal (doação) foi um sucesso.
+  // Callback que será chamado ao fechar o modal
   const [modalCloseCallback, setModalCloseCallback] = useState(null);
 
   useEffect(() => {
     initializeAuth((loggedIn) => setIsAdminLoggedIn(loggedIn));
   }, []);
 
-  // openModal agora aceita um callback que será chamado ao fechar o modal
-  // (Este callback será passado para o Modal e ele o chamará quando fechar,
-  // mas o Modal decidirá SE deve chamar, baseado no sucesso da operação interna).
+  // openModal aceita um callback que será chamado ao fechar o modal
   const openModal = (item = null, onCloseCallback = null) => {
     setSelectedItem(item);
-    setModalCloseCallback(onCloseCallback); // Armazena o callback para ser usado quando o modal for fechado
+    // Corrige o armazenamento do callback
+    setModalCloseCallback(() => onCloseCallback);
     setShowModal(true);
   };
 
-  const closeModal = (didSucceed = false) => {
-    // closeModal AGORA RECEBE UM FLAG DE SUCESSO
+  const closeModal = () => {
     setShowModal(false);
     setSelectedItem(null);
-    // Chame o callback APENAS SE A OPERAÇÃO INTERNA FOI SUCESSO e o callback existe
-    if (didSucceed && modalCloseCallback) {
+
+    // SEMPRE chama o callback se ele existir
+    if (modalCloseCallback) {
       modalCloseCallback();
     }
-    setModalCloseCallback(null); // Limpa o callback
+
+    setModalCloseCallback(null);
     setFormData({ nome: "", email: "", lgpdConsent: false });
   };
 
@@ -81,21 +80,12 @@ const App = () => {
   return (
     <Router>
       <div className="min-h-screen">
-        <div className="fixed bottom-4 right-4 z-40">
-          <a
-            href="/admin/login"
-            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm shadow-lg transition-colors"
-          >
-            Admin Login
-          </a>
-        </div>
-
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/livros" element={<BookPage openModal={openModal} />} />
           <Route path="/jogos" element={<GamePage openModal={openModal} />} />
           <Route
-            path="/admin/login"
+            path="/login"
             element={<LoginPage onLogin={handleAdminLogin} />}
           />
           <Route
@@ -121,8 +111,7 @@ const App = () => {
             }
             formData={formData}
             setFormData={setFormData}
-            // handleFormSubmit não é mais passado para o Modal
-            closeModal={closeModal} // <-- MUITO IMPORTANTE: Passa o closeModal do App.jsx
+            closeModal={closeModal}
           />
         )}
       </div>

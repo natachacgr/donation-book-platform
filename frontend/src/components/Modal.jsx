@@ -8,27 +8,26 @@ const Modal = ({
   currentPage,
   formData,
   setFormData,
-  closeModal, // closeModal agora recebe um flag de sucesso
+  closeModal,
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState("");
-  const [isSuccess, setIsSuccess] = useState(false); // <--- ESTE ESTADO É FUNDAMENTAL
+  const [isSuccess, setIsSuccess] = useState(false);
 
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Esta função é o ponto de saída do modal
+  // Esta função é o ponto de saída do modal - agora sem parâmetros
   const handleClose = () => {
-    // isSuccess reflete o resultado da ÚLTIMA TENTATIVA de doação
-    closeModal(isSuccess); // <--- PASSA O isSuccess PARA O App.jsx
+    closeModal(); // Chama sem parâmetros
   };
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
     setFeedbackMessage("");
-    setIsSuccess(false); // Resetar sucesso antes de cada nova tentativa de submissão
+    setIsSuccess(false);
 
     try {
       const { nome, email, lgpdConsent } = formData;
@@ -37,7 +36,7 @@ const Modal = ({
         throw new Error("Você deve aceitar a Política de Privacidade.");
       }
 
-      let response; // Variável para armazenar a resposta da API de doação
+      let response;
       if (currentPage === "livros") {
         if (
           !selectedItem ||
@@ -53,7 +52,6 @@ const Modal = ({
         }
 
         response = await doarLivro({
-          // Armazena a resposta aqui
           nome,
           email,
           titulo: selectedItem.titulo,
@@ -78,7 +76,6 @@ const Modal = ({
       } else {
         // Se for doação de jogo
         response = await doarJogo({
-          // Armazena a resposta aqui
           nome,
           email,
           lgpdConsent: lgpdConsent,
@@ -90,7 +87,7 @@ const Modal = ({
         setFeedbackMessage(
           response.message || "Doação registrada com sucesso!"
         );
-        setIsSuccess(true); // <--- MARCA O SUCESSO AQUI
+        setIsSuccess(true);
         // Limpar o formulário somente após o sucesso
         setFormData({
           nome: "",
@@ -98,7 +95,7 @@ const Modal = ({
           lgpdConsent: false,
         });
       } else {
-        // Se response.success for false ou response for null/undefined (o que não deve acontecer com throws)
+        // Se response.success for false ou response for null/undefined
         throw new Error(response?.message || "Falha ao registrar doação.");
       }
     } catch (error) {
@@ -106,7 +103,7 @@ const Modal = ({
       setFeedbackMessage(
         `Erro: ${error.message || "Ocorreu um erro desconhecido."}`
       );
-      setIsSuccess(false); // <--- GARANTE QUE O SUCESSO É FALSO EM CASO DE ERRO
+      setIsSuccess(false);
     } finally {
       setIsSubmitting(false);
     }
@@ -130,7 +127,7 @@ const Modal = ({
               </h3>
             </div>
             <button
-              onClick={handleClose} // <--- CHAMAR handleClose
+              onClick={handleClose}
               disabled={isSubmitting}
               className="w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center transition-colors disabled:opacity-50"
             >
@@ -164,7 +161,7 @@ const Modal = ({
             </div>
           )}
 
-          {!isSuccess ? ( // Exibe o formulário SE NÃO HOUVE SUCESSO AINDA
+          {!isSuccess ? (
             <form onSubmit={handleFormSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -221,7 +218,7 @@ const Modal = ({
               <div className="flex space-x-3 pt-4">
                 <button
                   type="button"
-                  onClick={handleClose} // <--- CHAMAR handleClose
+                  onClick={handleClose}
                   disabled={isSubmitting}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -247,7 +244,6 @@ const Modal = ({
               </div>
             </form>
           ) : (
-            // Exibe o botão "Fechar" SE JÁ HOUVE SUCESSO
             <div className="text-center mt-6">
               <button
                 onClick={handleClose}

@@ -1,12 +1,49 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required
-from app import db
+from app import db, mail # <--- IMPORTANTE: Importe 'mail' aqui!
 from app.models import Doacao, Livro
-from app.utils.validators import validar_email # Importe apenas validar_email
+from app.utils.validators import validar_email
 from datetime import datetime
+from flask_mail import Message # <--- IMPORTANTE: Importe 'Message' aqui!
+from threading import Thread # <--- IMPORTANTE: Importe 'Thread' para envio assíncrono
 
 doacoes_bp = Blueprint('doacoes', __name__)
 
+# Função auxiliar para enviar email em segundo plano
+def send_async_email(app, msg):
+    with app.app_context():
+        try:
+            mail.send(msg)
+        except Exception as e:
+            print(f"Erro ao enviar email no thread assíncrono: {e}")
+
+# Função principal para enviar email de agradecimento
+def send_thank_you_email(recipient_email, item_donated):
+    try:
+        # Acessa a configuração padrão do remetente a partir da aplicação atual
+        default_sender = current_app.config.get('MAIL_DEFAULT_SENDER')
+
+        msg = Message(
+            subject="Obrigado(a) pela sua doação à Biblioteca Municipal!",
+            sender=default_sender, # Define o remetente
+            recipients=[recipient_email],
+            html=f"""
+            <p>Olá,</p>
+            <p>A Biblioteca Municipal de Santa Rita do Sapucaí agradece imensamente a sua doação de <b>"{item_donated}"</b>!</p>
+            <p>Sua contribuição é muito importante para enriquecer nosso acervo e ajudar a comunidade.</p>
+            <p>Atenciosamente,</p>
+            <p>Equipe da Biblioteca Municipal</p>
+            <br>
+            <p style="font-size: 0.8em; color: #777;">Este é um email automático, por favor não responda.</p>
+            """
+        )
+        # Enviar email em um thread separado para não bloquear a requisição HTTP
+        Thread(target=send_async_email, args=(current_app._get_current_object(), msg)).start()
+        print(f"Email de agradecimento acionado para {recipient_email} sobre {item_donated}")
+    except Exception as e:
+        print(f"Erro ao preparar/acionar envio de email para {recipient_email}: {e}")
+
+# ROTA GET QUE ESTAVA FALTANDO
 @doacoes_bp.route('', methods=['GET'])
 @jwt_required()
 def get_doacoes():
@@ -44,23 +81,18 @@ def create_doacao():
         data = request.get_json()
 
         nome = data.get('nome', '').strip()
-        # cpf = data.get('cpf', '').strip() # REMOVIDO: Não pegar mais o CPF
         email = data.get('email', '').strip()
         tipo = data.get('tipo', '').lower()
         item = data.get('item', '').strip()
         livro_id = data.get('livro_id')
         lgpd_consent = data.get('lgpdConsent', False)
 
-        # Validações (SEM CPF)
-        if not nome or not email or not tipo or not item: # CPF removido da validação de obrigatórios
+        # Validações
+        if not nome or not email or not tipo or not item:
             return jsonify({'error': 'Nome, email, tipo e item são obrigatórios'}), 400
 
         if not lgpd_consent:
             return jsonify({'error': 'É necessário aceitar os termos da LGPD'}), 400
-
-        # REMOVIDO: Não validar mais o CPF
-        # if not validar_cpf(cpf):
-        #     return jsonify({'error': 'CPF inválido'}), 400
 
         if not validar_email(email):
             return jsonify({'error': 'Email inválido'}), 400
@@ -69,7 +101,10 @@ def create_doacao():
             return jsonify({'error': 'Tipo deve ser "livro" ou "jogo"'}), 400
 
         # Se for doação de livro, verificar se o livro existe e tem estoque
-        if tipo == 'livro' and livro_id:
+        if tipo == 'livro':
+            if not livro_id:
+                return jsonify({'error': 'ID do livro é obrigatório para doação de livro'}), 400
+
             livro = Livro.query.get(livro_id)
             if not livro:
                 return jsonify({'error': 'Livro não encontrado'}), 404
@@ -79,19 +114,25 @@ def create_doacao():
 
             # Reduzir quantidade do livro
             livro.quantidade -= 1
-            livro.updated_at = datetime.utcnow() # Atualiza o timestamp de modificação do livro
+            livro.updated_at = datetime.utcnow()
 
         doacao = Doacao(
             nome=nome,
-            # cpf=cpf, # REMOVIDO: Não passar CPF para o modelo
             email=email,
             tipo=tipo,
             item=item,
-            livro_id=livro_id if tipo == 'livro' else None # Garante que livro_id é None para jogos
+            livro_id=livro_id if tipo == 'livro' else None
         )
 
         db.session.add(doacao)
         db.session.commit()
+
+        # --- AQUI: Chamar a função de envio de email após o commit da doação ---
+        # Certifique-se de que item_donated é o que você quer que apareça no email.
+        # Para jogos, 'item' já deve ser algo como 'Jogo de tabuleiro'.
+        # Para livros, 'item' já deve ser 'Titulo - Autor'.
+        send_thank_you_email(email, item)
+        # --- Fim da chamada de email ---
 
         return jsonify({
             'success': True,
@@ -111,18 +152,13 @@ def update_doacao(doacao_id):
         data = request.get_json()
 
         nome = data.get('nome', '').strip()
-        # cpf = data.get('cpf', '').strip() # REMOVIDO: Não pegar mais o CPF
         email = data.get('email', '').strip()
         tipo = data.get('tipo', '').lower()
         item = data.get('item', '').strip()
 
-        # Validações (SEM CPF)
-        if not nome or not email or not tipo or not item: # CPF removido
+        # Validações
+        if not nome or not email or not tipo or not item:
             return jsonify({'error': 'Nome, email, tipo e item são obrigatórios'}), 400
-
-        # REMOVIDO: Não validar mais o CPF
-        # if not validar_cpf(cpf):
-        #     return jsonify({'error': 'CPF inválido'}), 400
 
         if not validar_email(email):
             return jsonify({'error': 'Email inválido'}), 400
@@ -131,7 +167,6 @@ def update_doacao(doacao_id):
             return jsonify({'error': 'Tipo deve ser "livro" ou "jogo"'}), 400
 
         doacao.nome = nome
-        # doacao.cpf = cpf # REMOVIDO: Não atualizar mais o CPF
         doacao.email = email
         doacao.tipo = tipo
         doacao.item = item
@@ -158,7 +193,7 @@ def delete_doacao(doacao_id):
             livro = Livro.query.get(doacao.livro_id)
             if livro:
                 livro.quantidade += 1
-                livro.updated_at = datetime.utcnow() # Atualiza o timestamp de modificação do livro
+                livro.updated_at = datetime.utcnow()
 
         db.session.delete(doacao)
         db.session.commit()

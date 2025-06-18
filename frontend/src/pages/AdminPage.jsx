@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react"; // Adicione useCallback
 import { Search, Lock } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom"; // Importe useNavigate
 
 import ToggleSwitch from "../components/ToggleSwitch";
 import AdminBooksTable from "../components/AdminBooksTable";
@@ -19,6 +19,7 @@ import {
 } from "../services/api";
 
 const AdminPage = ({ onLogout }) => {
+  // onLogout é passado do App.jsx
   const [activeTab, setActiveTab] = useState("livros");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
@@ -35,6 +36,51 @@ const AdminPage = ({ onLogout }) => {
   const [livros, setLivros] = useState([]);
   const [relatorios, setRelatorios] = useState([]);
 
+  // Funções de carregamento envoltas em useCallback para estabilidade
+  const loadLivros = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const response = await getLivros();
+      setLivros(response.livros);
+    } catch (err) {
+      setError("Erro ao carregar livros: " + err.message);
+      console.error("Erro ao carregar livros:", err);
+      if (
+        err.message.includes("Sessão expirada") ||
+        err.message.includes("não autorizada")
+      ) {
+        onLogout(); // Chame onLogout do App.jsx para limpar o estado e redirecionar
+        navigate("/admin/login");
+      }
+      setLivros([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [onLogout, navigate]); // Adicione onLogout e navigate como dependências
+
+  const loadRelatorios = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const response = await listarDoacoes(); // Chama a API para listar doações
+      setRelatorios(response.doacoes);
+    } catch (err) {
+      setError("Erro ao carregar relatórios: " + err.message);
+      console.error("Erro ao carregar relatórios:", err);
+      if (
+        err.message.includes("Sessão expirada") ||
+        err.message.includes("não autorizada")
+      ) {
+        onLogout(); // Chame onLogout do App.jsx para limpar o estado e redirecionar
+        navigate("/admin/login");
+      }
+      setRelatorios([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [onLogout, navigate]); // Adicione onLogout e navigate como dependências
+
   // Carregar dados quando o componente monta ou quando a aba muda
   useEffect(() => {
     if (activeTab === "livros") {
@@ -42,39 +88,7 @@ const AdminPage = ({ onLogout }) => {
     } else {
       loadRelatorios();
     }
-  }, [activeTab]);
-
-  // Função para carregar livros do backend
-  const loadLivros = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const response = await getLivros(); // Pegue a resposta completa
-      setLivros(response.livros); // <--- CORREÇÃO AQUI: Acesse 'livros' da resposta
-    } catch (err) {
-      setError("Erro ao carregar livros: " + err.message);
-      console.error("Erro ao carregar livros:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Função para carregar relatórios do backend
-  const loadRelatorios = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const response = await listarDoacoes(); // Pegue a resposta completa
-      setRelatorios(response.doacoes); // <--- CORREÇÃO AQUI: Acesse 'doacoes' da resposta (se o backend retornar assim)
-      // Se o backend retornar um array diretamente, mantenha setRelatorios(response).
-      // Baseado em doacoes.py, deve ser 'doacoes'.
-    } catch (err) {
-      setError("Erro ao carregar relatórios: " + err.message);
-      console.error("Erro ao carregar relatórios:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [activeTab, loadLivros, loadRelatorios]); // Adicione loadLivros e loadRelatorios como dependências
 
   // Filtros de busca
   const filteredLivros = livros.filter(
@@ -112,7 +126,7 @@ const AdminPage = ({ onLogout }) => {
         await criarLivro(formData);
       }
 
-      await loadLivros(); // Recarregar a lista de livros
+      await loadLivros();
       setEditingBook(null);
       setBookModalOpen(false);
     } catch (err) {
@@ -129,7 +143,7 @@ const AdminPage = ({ onLogout }) => {
         setLoading(true);
         setError("");
         await deletarLivro(id);
-        await loadLivros(); // Recarregar lista
+        await loadLivros();
       } catch (err) {
         setError("Erro ao excluir livro: " + err.message);
         console.error("Erro ao excluir livro:", err);
@@ -150,8 +164,6 @@ const AdminPage = ({ onLogout }) => {
       setLoading(true);
       setError("");
 
-      // Aqui você pode implementar uma função de atualização de relatório
-      // Por enquanto, vamos apenas atualizar localmente
       setRelatorios((prev) =>
         prev.map((r) => (r.id === editingReport.id ? { ...r, ...formData } : r))
       );
@@ -172,7 +184,7 @@ const AdminPage = ({ onLogout }) => {
         setLoading(true);
         setError("");
         await excluirDoacao(id);
-        await loadRelatorios(); // Recarregar lista
+        await loadRelatorios();
       } catch (err) {
         setError("Erro ao excluir relatório: " + err.message);
         console.error("Erro ao excluir relatório:", err);
@@ -183,8 +195,8 @@ const AdminPage = ({ onLogout }) => {
   };
 
   const handleLogoutClick = () => {
-    onLogout();
-    navigate("/admin/login");
+    onLogout(); // Chama onLogout do App.jsx para limpar o estado e token
+    navigate("/admin/login"); // Redireciona para a página de login
   };
 
   return (
@@ -303,6 +315,7 @@ const AdminPage = ({ onLogout }) => {
         onClose={() => {
           setBookModalOpen(false);
           setEditingBook(null);
+          loadLivros(); // <--- CHAMA loadLivros AO FECHAR O MODAL (se for edição/criação de livro)
         }}
         book={editingBook}
         onSave={handleSaveBook}
@@ -314,6 +327,7 @@ const AdminPage = ({ onLogout }) => {
         onClose={() => {
           setReportModalOpen(false);
           setEditingReport(null);
+          loadRelatorios(); // <--- CHAMA loadRelatorios AO FECHAR O MODAL (se for edição/criação de relatório)
         }}
         report={editingReport}
         onSave={handleSaveReport}

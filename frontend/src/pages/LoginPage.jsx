@@ -90,10 +90,6 @@ const LoginPage = ({ onLogin }) => {
             Entrar
           </button>
         </form>
-
-        <div className="mt-6 text-center">
-          <p className="text-sm text-gray-500">Demo: admin / 123456</p>
-        </div>
       </div>
     </div>
   );
